@@ -1,2 +1,1 @@
-# Pest_Control_TD
-Python game build with TD
+Program intended to flex and strengthen my understanding of object oriented programming. 
