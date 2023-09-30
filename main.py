@@ -73,6 +73,7 @@ while running:
                 place_x, place_y = pygame.mouse.get_pos()
                 allies.append(units.joe(place_x - 25, place_y - 25))
 
+
     frame = frame + 1
     if frame >= 25:
         frame = 1
