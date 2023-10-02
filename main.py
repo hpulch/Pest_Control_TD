@@ -1,66 +1,68 @@
 import pygame
-from pygame.locals import Rect
 
-import level
-import shop
-import units
+import Units
+import Levels
+import Pause
+
+
+def frames(f):
+    f += 1
+    if f >= 25:
+        f = 1
+    return f
+
 
 pygame.init()
 screen = pygame.display.set_mode((800, 640))
-stage = level.one()
-enemies = []
-allies = []
+current_level = 1
+level = [0, Levels.One(screen), Levels.Two(screen)]
 
-fps = 24
+enemies = pygame.sprite.Group()
+allies = pygame.sprite.Group()
+count = 0
+
+
 frame = 1
-sec = 0
+
 running = True
-
 while running:
+    screen.fill((0, 128, 0))
 
-    screen.blit(stage.map, stage.pos)
-    sec1 = Rect(-50, 330, 263, 50)
-    sec2 = Rect(163, 380, 50, 110)
-    sec3 = Rect(213, 440, 167, 50)
-    sec4 = Rect(330, 330, 50, 130)
-    sec5 = Rect(380, 330, 120, 50)
-    sec6 = Rect(450, 205, 50, 140)
-    sec7 = Rect(500, 205, 225, 50)
-    sec8 = Rect(675, 205, 50, 175)
-    sec9 = Rect(675, 330, 200, 50)
+    level[current_level].draw(screen)
+    if level[current_level].update(frame):
+        enemies.add(Units.Ant(level[current_level].get_waypoints()))
 
-    pygame.draw.rect(screen, (255, 0, 0), Rect.union(sec1, sec2))
+    enemies.update(frame)
 
-    # Spawn enemies, move them through the level path, animate their motion
-    if stage.spawn(sec, frame):
-        enemies.append(units.ant(-50, 310))
+    for ally in allies:
+        if len(enemies) == 0:
+            ally.reset()
+        for bug in enemies:
+            # For each ally compare it's hit_box to every bug and update its attack status
+            ally.update(bug.hit_box)
+            if ally.get_status():
+                # If ally if attacking, stop checking bugs and do not update so he continues to attack first bug
+                break
 
-    target = []
     for bug in enemies:
-        section, x_pos, y_pos = stage.trail(bug.get_section(), bug.get_x_pos(), bug.get_y_pos(), 1)
-        bug.update(section, x_pos, y_pos)
-        # pygame.draw.rect(screen, (255, 0, 0), bug.get_hit_box())
-        screen.blit(bug.animate(frame), (bug.get_x_pos(), bug.get_y_pos()))
-        target.append(bug.get_hit_box())
+        for ally in allies:
+            # For each bug compare it's hit_box to every ally and update its attack status
+            if bug.update_hit(ally.hit_box, ally.damage) == -1:
+                level[current_level].track_points(bug.dead_bug())
+                break
 
-    dead_bugs = []
+    allies.draw(screen)
+
+    # blit the transparent overlay first and then blit the sprite image overtop
     for bug in enemies:
-        for dude in allies:
-            if pygame.Rect.colliderect(dude.get_hit_box(), bug.get_hit_box()):
-                bug.lose_health()
-        if bug.get_health() <= 0:
-            dead_bugs.append(bug)
-    for bug in dead_bugs:
-        enemies.remove(bug)
+        bug.overlay(screen)
+    enemies.draw(screen)
 
-    for dude in allies:
-        attack = pygame.Rect.collidelist(dude.get_hit_box(), target) > -1
-        screen.blit(dude.animate(attack), (dude.get_x_pos(), dude.get_y_pos()))
-        if attack:
-            screen.blit(dude.get_attack(), (dude.x_gas, dude.y_gas))
-        # else:
-            # pygame.draw.rect(screen, (0, 255, 0), dude.hit_box)
+    # blit the transparent overlay overtop allies
+    for joe in allies:
+        joe.overlay(screen)
 
+    # update display surface to the screen
     pygame.display.flip()
 
     for event in pygame.event.get():
@@ -68,53 +70,20 @@ while running:
             running = False
         elif event.type == pygame.KEYDOWN:
             if event.key == pygame.K_ESCAPE:
-                shop.pause(screen).run(screen)
+                Pause.loop(screen)
             elif event.key == pygame.K_q:
-                place_x, place_y = pygame.mouse.get_pos()
-                allies.append(units.joe(place_x - 25, place_y - 25))
+                mouse_x, mouse_y = pygame.mouse.get_pos()
+                on_path = level[current_level].path_mask.get_at((mouse_x, mouse_y + 20))
+                if on_path:
+                    print("Cannot place allies on path!")
+                else:
+                    allies.add(Units.Joe(mouse_x, mouse_y))
 
+    current_level = level[current_level].next_level(screen)
+    frame = frames(frame)
+    pygame.time.Clock().tick(24)
+    print(current_level)
+    print(level[current_level])
+pygame.quit()
 
-    frame = frame + 1
-    if frame >= 25:
-        frame = 1
-        sec = sec + 1
-    pygame.time.Clock().tick(fps)
-
-'''           
-CODE STORAGE
-
-
-    # Spawn enemies, move them through the level path, animate their motion
-    if stage.spawn(sec, frame):
-        enemies.append(units.ant(-50, 310))
-
-    target = []
-    for bug in enemies:
-        section, x_pos, y_pos = stage.trail(bug.get_section(), bug.get_x_pos(), bug.get_y_pos(), 1)
-        bug.update(section, x_pos, y_pos)
-        pygame.draw.rect(screen, (255, 0, 0), bug.get_hit_box())
-        screen.blit(bug.animate(frame), (bug.get_x_pos(), bug.get_y_pos()))
-        if bug.get_section() == 'Complete':
-            print("gone!")
-        else:
-            target.append(bug.get_hit_box())
-
-    for dude in allies:
-        attack = pygame.Rect.collidelist(dude.get_hit_box(), target) > -1
-        screen.blit(dude.animate(attack), (dude.get_x_pos(), dude.get_y_pos()))
-        if attack:
-            screen.blit(dude.get_attack(), (dude.x_gas, dude.y_gas))
-        else:
-            pygame.draw.rect(screen, (0, 255, 0), dude.hit_box)
-
-    dead_bugs = []
-    for bug in enemies:
-        for dude in allies:
-            if pygame.Rect.colliderect(dude.get_hit_box(), bug.get_hit_box()):
-                bug.lose_health()
-            if bug.get_health() <= 0:
-                dead_bugs.append(bug)
-
-    for bug in dead_bugs:
-        enemies.remove(bug)
-'''
+# pygame.draw.lines(screen, "grey0", False, one.waypoints)
